@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Analisador de CCT (standalone)</title>
+<style>
+:root{
+  --bg:#f6f7f9;--card:#ffffff;--ink:#1b2028;--muted:#5b6472;--line:#e3e6ea;
+  --accent:#1d4ed8;--accent-ink:#ffffff;--red:#dc2626;--redbg:#fef2f2;
+  --yellow:#b45309;--yellowbg:#fffbeb;--green:#15803d;--greenbg:#f0fdf4;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14161a;--card:#1d2026;--ink:#eef0f3;--muted:#9aa3b0;--line:#2b2f37;
+    --accent:#5b8def;--accent-ink:#0b1220;--redbg:#2a1414;--yellowbg:#2a2011;--greenbg:#0f2318;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161a;--card:#1d2026;--ink:#eef0f3;--muted:#9aa3b0;--line:#2b2f37;
+  --accent:#5b8def;--accent-ink:#0b1220;--redbg:#2a1414;--yellowbg:#2a2011;--greenbg:#0f2318;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+.wrap{max-width:900px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
+input[type=text],input[type=date],textarea{
+  width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  border-radius:8px;padding:9px 10px;font-size:14px;font-family:inherit
+}
+textarea{min-height:160px;resize:vertical}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:640px){.grid3{grid-template-columns:1fr}}
+.row2{display:flex;gap:8px}
+.dropzone{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer;margin-bottom:10px}
+.dropzone.drag{border-color:var(--accent);color:var(--accent)}
+button{cursor:pointer;font-family:inherit}
+.btn{background:var(--accent);color:var(--accent-ink);border:none;border-radius:9px;padding:11px 18px;font-size:14px;font-weight:600}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:6px 12px;font-size:12px}
+.field{margin-bottom:12px}
+.section-title{font-size:16px;font-weight:700;margin:26px 0 10px;padding-top:10px;border-top:1px solid var(--line)}
+.section-title:first-child{border-top:none;margin-top:0}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.pill.red{background:var(--redbg);color:var(--red)}
+.pill.yellow{background:var(--yellowbg);color:var(--yellow)}
+.pill.green{background:var(--greenbg);color:var(--green)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+.tblwrap{overflow-x:auto}
+.clause{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.clause summary{padding:10px 12px;cursor:pointer;font-weight:600;font-size:13px;list-style:none}
+.clause summary::-webkit-details-marker{display:none}
+.clause summary::before{content:"▸ ";color:var(--accent)}
+.clause[open] summary::before{content:"▾ "}
+.clause .body{padding:0 12px 12px;font-size:13px;color:var(--ink)}
+.kv{margin:4px 0}
+.kv b{color:var(--muted);font-weight:600}
+.chk{font-size:13px;margin:5px 0;display:flex;gap:8px}
+.risk-block{margin-bottom:14px}
+.muted{color:var(--muted);font-size:13px}
+.hist{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.hist button{font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#status{font-size:13px;color:var(--muted);margin-top:10px}
+.err{color:var(--red);font-size:13px;margin-top:8px}
+.top-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top-actions">
+    <div>
+      <h1>Analisador de Convenções Coletivas (CCT)</h1>
+      <p class="sub">Cole ou envie o texto da CCT e receba uma análise operacional para o RH/DP.</p>
+    </div>
+    <button class="btn-ghost" id="newBtn">+ Nova análise</button>
+  </div>
+
+  <div id="history" class="hist"></div>
+
+  <div class="card" id="formCard">
+    <div class="grid3">
+      <div class="field"><label>Sindicato / Categoria</label><input type="text" id="sindicato" placeholder="Ex.: Sind. Empregados no Comércio"></div>
+      <div class="field"><label>Vigência início</label><input type="date" id="vigIni"></div>
+      <div class="field"><label>Vigência fim</label><input type="date" id="vigFim"></div>
+    </div>
+    <div class="field"><label>CNPJ da empresa (opcional)</label><input type="text" id="cnpj" placeholder="00.000.000/0000-00"></div>
+    <div class="field"><label>Sua API key da Anthropic</label><input type="text" id="apiKey" placeholder="sk-ant-..."></div>
+    <p class="muted" style="margin-top:-6px">Fica salva só neste navegador (localStorage) e é usada apenas para chamar api.anthropic.com diretamente.</p>
+
+    <div class="dropzone" id="drop">
+      <div id="dropLabel">Arraste um arquivo <b>.pdf</b> ou <b>.txt</b> aqui, ou clique para escolher — ou cole o texto abaixo</div>
+      <input type="file" id="file" accept=".txt,.pdf" style="display:none">
+    </div>
+    <div class="field">
+      <label>Texto integral da CCT</label>
+      <textarea id="cctText" placeholder="Cole aqui o texto completo da convenção coletiva..."></textarea>
+    </div>
+    <button class="btn" id="analyzeBtn">Analisar Convenção</button>
+    <div id="status"></div>
+    <div id="err" class="err"></div>
+  </div>
+
+  <div id="report"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.13.216/legacy/build/pdf.min.js"></script>
+<script>
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+if (pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.13.216/legacy/build/pdf.worker.min.js";
+}
+const $ = s => document.querySelector(s);
+
+async function callClaudeAPI(apiKey, userContent){
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-5',
+      max_tokens: 8000,
+      messages: [{ role: 'user', content: userContent }]
+    })
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error('Erro da API (' + res.status + '): ' + t.slice(0,300));
+  }
+  const data = await res.json();
+  const text = data.content.filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  const clean = text.replace(/```json|```/g,'').trim();
+  return JSON.parse(clean);
+}
+
+// ---------- file / dropzone ----------
+$('#drop').addEventListener('click', ()=>$('#file').click());
+$('#file').addEventListener('change', e=>readFile(e.target.files[0]));
+$('#drop').addEventListener('dragover', e=>{e.preventDefault(); $('#drop').classList.add('drag');});
+$('#drop').addEventListener('dragleave', ()=>$('#drop').classList.remove('drag'));
+$('#drop').addEventListener('drop', e=>{
+  e.preventDefault(); $('#drop').classList.remove('drag');
+  if(e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+});
+function readFile(f){
+  if(!f) return;
+  const name = f.name.toLowerCase();
+  if(name.endsWith('.pdf')){
+    readPdf(f);
+    return;
+  }
+  const r = new FileReader();
+  r.onload = ()=> $('#cctText').value = r.result;
+  r.readAsText(f);
+}
+
+async function readPdf(f){
+  const label = $('#dropLabel');
+  const original = label.innerHTML;
+  if(!pdfjsLib){
+    $('#err').textContent = 'Leitor de PDF não carregou (verifique sua conexão) — cole o texto manualmente ou tente novamente.';
+    return;
+  }
+  try{
+    label.textContent = 'Lendo PDF...';
+    const buf = await f.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    let text = '';
+    for(let i=1; i<=pdf.numPages; i++){
+      label.textContent = `Lendo PDF... página ${i} de ${pdf.numPages}`;
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(it=>it.str).join(' ') + '\n\n';
+    }
+    if(!text.trim()){
+      $('#err').textContent = 'Não foi possível extrair texto deste PDF (pode ser um documento escaneado/imagem). Cole o texto manualmente.';
+    }else{
+      $('#cctText').value = text.trim();
+      $('#err').textContent = '';
+    }
+  }catch(e){
+    $('#err').textContent = 'Erro ao ler o PDF: ' + (e && e.message ? e.message : e);
+  }finally{
+    label.innerHTML = original;
+  }
+}
+
+// ---------- history (localStorage, per-viewer) ----------
+function histKey(){ return 'cct_history_v1'; }
+function loadHistory(){
+  try{ return JSON.parse(localStorage.getItem(histKey())||'[]'); }catch{ return []; }
+}
+function saveHistory(list){
+  try{ localStorage.setItem(histKey(), JSON.stringify(list.slice(0,15))); }catch{}
+}
+function renderHistory(){
+  const list = loadHistory();
+  const el = $('#history'); el.innerHTML='';
+  list.forEach((item,i)=>{
+    const wrap=document.createElement('span');
+    wrap.style.cssText='display:inline-flex;align-items:center;gap:4px';
+    const chk=document.createElement('input');
+    chk.type='checkbox'; chk.className='cmpchk'; chk.dataset.idx=i;
+    const b=document.createElement('button');
+    b.textContent = (item.meta.sindicato||'CCT sem nome') + ' · ' + (item.meta.vigIni||'?');
+    b.onclick=()=>{ renderReport(item.data, item.meta); $('#formCard').style.display='none'; };
+    wrap.appendChild(chk); wrap.appendChild(b);
+    el.appendChild(wrap);
+  });
+  if(list.length>=2){
+    const cmp=document.createElement('button');
+    cmp.textContent='Comparar selecionadas'; cmp.style.fontWeight='700';
+    cmp.onclick=()=>{
+      const idxs=[...document.querySelectorAll('.cmpchk:checked')].map(c=>+c.dataset.idx);
+      if(idxs.length<2){ $('#err').textContent='Selecione ao menos 2 convenções no histórico para comparar.'; return; }
+      $('#err').textContent='';
+      renderComparison(idxs.map(i=>list[i]));
+      $('#formCard').style.display='none';
+    };
+    el.appendChild(cmp);
+  }
+}
+$('#newBtn').onclick = ()=>{ $('#formCard').style.display=''; $('#report').innerHTML=''; };
+renderHistory();
+try{
+  const savedKey = localStorage.getItem('cct_api_key');
+  if(savedKey) $('#apiKey').value = savedKey;
+}catch{}
+$('#apiKey').addEventListener('change', ()=>{
+  try{ localStorage.setItem('cct_api_key', $('#apiKey').value.trim()); }catch{}
+});
+
+// ---------- system prompt & schema ----------
+const SYSTEM = `Você é um Analista Sênior especialista em Convenções Coletivas de Trabalho (CCT/ACT), Direito Coletivo do Trabalho e rotinas de Departamento Pessoal (folha, ponto, benefícios, férias, rescisão, encargos).
+Leia o texto da CCT INTEGRALMENTE e produza uma análise cláusula por cláusula, prática e aplicável ao RH/DP.
+Regras obrigatórias:
+- NUNCA invente cláusulas, valores, percentuais, prazos ou códigos de sistema. Se a informação não constar, escreva "não consta na CCT".
+- Diferencie texto da CCT de interpretação prática.
+- Se houver ambiguidade, sinalize como dúvida em "pending_questions", não conclua sozinho.
+- Classifique riscos apenas por natureza operacional (imediato / operacional / rotina), sem notas numéricas.
+- Responda APENAS com um objeto JSON válido, sem markdown, sem texto fora do JSON, seguindo exatamente este formato (arrays podem ficar vazios, nunca omita chaves):
+{
+ "technical_sheet":{"employee_union":"","employer_union":"","category":"","territory":"","base_date":"","validity_start":"","validity_end":"","mte_registration":""},
+ "executive_summary":"",
+ "key_changes":[""],
+ "salary_adjustment":{"percentage":"","application_date":"","retroactive":"","calculation_formula":"","example":""},
+ "salary_floors":[{"role":"","previous_floor":"","current_floor":"","validity":"","notes":""}],
+ "benefits":[{"name":"","value":"","recipients":"","frequency":"","employee_discount":"","conditions":""}],
+ "jornada_ponto":{"resumo":"","banco_horas":"","intervalos":"","dom_feriados":""},
+ "horas_extras_adicionais":{"percentual_he":"","adicional_noturno":"","limite_diario":""},
+ "afastamentos":[{"tipo":"","prazo":"","documentos":""}],
+ "ferias":{"regras":""},
+ "rescisao":{"aviso_previo":"","prazo_pagamento":"","homologacao":""},
+ "estabilidades":[{"situacao":"","periodo":"","condicao":""}],
+ "contribuicoes":[{"tipo":"","valor":"","oposicao":""}],
+ "multas":[{"clausula":"","infracao":"","valor":""}],
+ "financial_impact":{"formula":"","resultado":"","dados_faltantes":[""]},
+ "risk_immediate":[""],
+ "risk_operational":[""],
+ "risk_routine":[""],
+ "checklist":[""],
+ "pending_questions":[""],
+ "clauses":[{"number":"","title":"","summary":"","who_is_covered":"","obligation_type":"","rh_impact":"","payroll_impact":"","timeclock_impact":"","deadline":"","breach_risk":"","recommended_action":""}]
+}`;
+
+function buildUserMsg(){
+  const meta = {
+    sindicato: $('#sindicato').value.trim(),
+    vigIni: $('#vigIni').value,
+    vigFim: $('#vigFim').value,
+    cnpj: $('#cnpj').value.trim(),
+  };
+  const text = $('#cctText').value.trim();
+  const msg = `Dados informados:\n- Sindicato/categoria: ${meta.sindicato||'não informado'}\n- Vigência: ${meta.vigIni||'?'} a ${meta.vigFim||'?'}\n- CNPJ: ${meta.cnpj||'não informado'}\n\nTexto integral da CCT:\n"""\n${text}\n"""`;
+  return {meta, msg};
+}
+
+// ---------- analyze ----------
+$('#analyzeBtn').onclick = async ()=>{
+  const text = $('#cctText').value.trim();
+  $('#err').textContent='';
+  if(!text || text.length < 50){
+    $('#err').textContent = 'Cole ou envie o texto completo da CCT antes de analisar.';
+    return;
+  }
+  const apiKey = $('#apiKey').value.trim();
+  if(!apiKey){
+    $('#err').textContent = 'Informe sua API key da Anthropic para analisar.';
+    return;
+  }
+  $('#analyzeBtn').disabled = true;
+  $('#status').textContent = 'Analisando cláusula por cláusula, pode levar um minuto...';
+  const {meta, msg} = buildUserMsg();
+  try{
+    const data = await callClaudeAPI(apiKey, SYSTEM + '\n\n' + msg);
+    saveAndRender(meta, data);
+  }catch(e){
+    $('#err').textContent = 'Erro na análise: ' + (e && e.message ? e.message : e);
+  }finally{
+    $('#analyzeBtn').disabled = false;
+    $('#status').textContent = '';
+  }
+};
+
+function saveAndRender(meta, data){
+  const list = loadHistory();
+  list.unshift({meta, data});
+  saveHistory(list);
+  renderHistory();
+  $('#formCard').style.display='none';
+  renderReport(data, meta);
+}
+
+// ---------- rendering ----------
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function section(title, html){ return `<div class="section-title">${esc(title)}</div>${html}`; }
+function list(arr){ if(!arr||!arr.length) return '<p class="muted">Nenhum item identificado.</p>'; return '<ul>'+arr.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>'; }
+function kv(k,v){ return v ? `<p class="kv"><b>${esc(k)}:</b> ${esc(v)}</p>` : ''; }
+
+function renderReport(d, meta){
+  d = d || {};
+  let out = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div><b>${esc(meta?.sindicato||'Convenção analisada')}</b><div class="muted">Vigência: ${esc(meta?.vigIni||'?')} a ${esc(meta?.vigFim||'?')}</div></div>
+    <button class="btn" id="wordBtn">Baixar relatório em Word</button>
+  </div>`;
+
+  out += section('Ficha Técnica', `<div class="card">
+    ${kv('Sindicato dos empregados', d.technical_sheet?.employee_union)}
+    ${kv('Sindicato patronal', d.technical_sheet?.employer_union)}
+    ${kv('Categoria', d.technical_sheet?.category)}
+    ${kv('Abrangência territorial', d.technical_sheet?.territory)}
+    ${kv('Data-base', d.technical_sheet?.base_date)}
+    ${kv('Vigência', (d.technical_sheet?.validity_start||'?')+' a '+(d.technical_sheet?.validity_end||'?'))}
+    ${kv('Registro MTE', d.technical_sheet?.mte_registration)}
+  </div>`);
+
+  out += section('Resumo Executivo', `<div class="card"><p>${esc(d.executive_summary)||'<span class="muted">Não gerado.</span>'}</p></div>`);
+
+  out += section('Principais Mudanças', `<div class="card">${list(d.key_changes)}</div>`);
+
+  out += section('Reajuste Salarial', `<div class="card">
+    ${kv('Percentual', d.salary_adjustment?.percentage)}
+    ${kv('Data de aplicação', d.salary_adjustment?.application_date)}
+    ${kv('Retroatividade', d.salary_adjustment?.retroactive)}
+    ${kv('Fórmula', d.salary_adjustment?.calculation_formula)}
+    ${kv('Exemplo', d.salary_adjustment?.example)}
+  </div>`);
+
+  if(d.salary_floors?.length){
+    out += section('Pisos Salariais', `<div class="card tblwrap"><table><tr><th>Cargo</th><th>Piso anterior</th><th>Piso atual</th><th>Vigência</th><th>Obs.</th></tr>
+      ${d.salary_floors.map(r=>`<tr><td>${esc(r.role)}</td><td>${esc(r.previous_floor)}</td><td>${esc(r.current_floor)}</td><td>${esc(r.validity)}</td><td>${esc(r.notes)}</td></tr>`).join('')}
+    </table></div>`);
+  }
+
+  if(d.benefits?.length){
+    out += section('Benefícios', `<div class="card tblwrap"><table><tr><th>Benefício</th><th>Valor</th><th>Quem recebe</th><th>Periodicidade</th><th>Desconto</th></tr>
+      ${d.benefits.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.value)}</td><td>${esc(r.recipients)}</td><td>${esc(r.frequency)}</td><td>${esc(r.employee_discount)}</td></tr>`).join('')}
+    </table></div>`);
+  }
+
+  out += section('Jornada, Ponto e Adicionais', `<div class="card">
+    ${kv('Jornada / resumo', d.jornada_ponto?.resumo)}
+    ${kv('Banco de horas', d.jornada_ponto?.banco_horas)}
+    ${kv('Intervalos', d.jornada_ponto?.intervalos)}
+    ${kv('Domingos / feriados', d.jornada_ponto?.dom_feriados)}
+    ${kv('% Hora extra', d.horas_extras_adicionais?.percentual_he)}
+    ${kv('Adicional noturno', d.horas_extras_adicionais?.adicional_noturno)}
+    ${kv('Limite diário HE', d.horas_extras_adicionais?.limite_diario)}
+  </div>`);
+
+  if(d.afastamentos?.length){
+    out += section('Afastamentos e Atestados', `<div class="card tblwrap"><table><tr><th>Tipo</th><th>Prazo</th><th>Documentos</th></tr>
+      ${d.afastamentos.map(r=>`<tr><td>${esc(r.tipo)}</td><td>${esc(r.prazo)}</td><td>${esc(r.documentos)}</td></tr>`).join('')}
+    </table></div>`);
+  }
+
+  out += section('Férias e Rescisão', `<div class="card">
+    ${kv('Regras de férias', d.ferias?.regras)}
+    ${kv('Aviso-prévio', d.rescisao?.aviso_previo)}
+    ${kv('Prazo de pagamento', d.rescisao?.prazo_pagamento)}
+    ${kv('Homologação', d.rescisao?.homologacao)}
+  </div>`);
+
+  if(d.estabilidades?.length){
+    out += section('Estabilidades', `<div class="card tblwrap"><table><tr><th>Situação</th><th>Período</th><th>Condição</th></tr>
+      ${d.estabilidades.map(r=>`<tr><td>${esc(r.situacao)}</td><td>${esc(r.periodo)}</td><td>${esc(r.condicao)}</td></tr>`).join('')}
+    </table></div>`);
+  }
+
+  if(d.contribuicoes?.length){
+    out += section('Contribuições Sindicais', `<div class="card tblwrap"><table><tr><th>Tipo</th><th>Valor</th><th>Oposição</th></tr>
+      ${d.contribuicoes.map(r=>`<tr><td>${esc(r.tipo)}</td><td>${esc(r.valor)}</td><td>${esc(r.oposicao)}</td></tr>`).join('')}
+    </table></div>`);
+  }
+
+  if(d.multas?.length){
+    out += section('Multas', `<div class="card tblwrap"><table><tr><th>Cláusula</th><th>Infração</th><th>Valor</th></tr>
+      ${d.multas.map(r=>`<tr><td>${esc(r.clausula)}</td><td>${esc(r.infracao)}</td><td>${esc(r.valor)}</td></tr>`).join('')}
+    </table></div>`);
+  }
+
+  out += section('Impacto Financeiro', `<div class="card">
+    ${kv('Fórmula', d.financial_impact?.formula)}
+    ${kv('Resultado', d.financial_impact?.resultado)}
+    ${d.financial_impact?.dados_faltantes?.length ? '<p class="kv"><b>Dados faltantes:</b></p>'+list(d.financial_impact.dados_faltantes) : ''}
+  </div>`);
+
+  out += section('⚠️ Análise de Risco', `<div class="card">
+    <div class="risk-block"><span class="pill red">Atenção imediata</span>${list(d.risk_immediate)}</div>
+    <div class="risk-block"><span class="pill yellow">Atenção operacional</span>${list(d.risk_operational)}</div>
+    <div class="risk-block"><span class="pill green">Controle de rotina</span>${list(d.risk_routine)}</div>
+  </div>`);
+
+  out += section('Cláusula por Cláusula', `<div>${(d.clauses||[]).map(c=>`
+    <details class="clause"><summary>${esc(c.number)} — ${esc(c.title)}</summary>
+    <div class="body">
+      ${kv('Resumo', c.summary)}
+      ${kv('Abrangência', c.who_is_covered)}
+      ${kv('Obrigatoriedade', c.obligation_type)}
+      ${kv('Impacto RH/DP', c.rh_impact)}
+      ${kv('Impacto folha', c.payroll_impact)}
+      ${kv('Impacto ponto', c.timeclock_impact)}
+      ${kv('Prazo', c.deadline)}
+      ${kv('Risco de descumprimento', c.breach_risk)}
+      ${kv('Ação recomendada', c.recommended_action)}
+    </div></details>`).join('') || '<p class="muted">Nenhuma cláusula estruturada retornada.</p>'}</div>`);
+
+  out += section('Checklist de Implementação', `<div class="card">${(d.checklist||[]).map(x=>`<div class="chk"><input type="checkbox">${esc(x)}</div>`).join('') || '<p class="muted">—</p>'}</div>`);
+
+  out += section('Perguntas Pendentes', `<div class="card">${list(d.pending_questions)}</div>`);
+
+  $('#report').innerHTML = out;
+  $('#wordBtn').onclick = ()=> downloadDocx(reportToDocxBody(meta, d), 'analise-cct.docx');
+  $('#report').scrollIntoView({behavior:'smooth'});
+}
+
+// ---------- Word (.docx) export ----------
+function xmlEsc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function docxP(text, o={}){
+  const rpr = (o.bold||o.size) ? `<w:rPr>${o.bold?'<w:b/>':''}${o.size?`<w:sz w:val="${o.size}"/>`:''}</w:rPr>` : '';
+  const ppr = o.before ? `<w:pPr><w:spacing w:before="${o.before}" w:after="${o.after||120}"/></w:pPr>` : '';
+  return `<w:p>${ppr}<w:r>${rpr}<w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r></w:p>`;
+}
+function docxH(text){ return docxP(text, {bold:true, size:28, before:280, after:140}); }
+function docxTable(headers, rows){
+  const cell = t => `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p><w:r><w:t xml:space="preserve">${xmlEsc(t)}</w:t></w:r></w:p></w:tc>`;
+  const border = '<w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders>';
+  const tr = arr => `<w:tr>${arr.map(cell).join('')}</w:tr>`;
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${border}</w:tblPr>${tr(headers)}${rows.map(tr).join('')}</w:tbl>`;
+}
+function reportToDocxBody(meta, d){
+  let b = docxH('Relatório de Análise de Convenção Coletiva');
+  b += docxP((meta?.sindicato||'')+' — Vigência: '+(meta?.vigIni||'?')+' a '+(meta?.vigFim||'?'));
+  b += docxH('Resumo Executivo'); b += docxP(d.executive_summary||'-');
+  b += docxH('Principais Mudanças'); (d.key_changes||[]).forEach(x=>b+=docxP('• '+x));
+  b += docxH('Reajuste Salarial');
+  b += docxP('Percentual: '+(d.salary_adjustment?.percentage||'-'));
+  b += docxP('Data de aplicação: '+(d.salary_adjustment?.application_date||'-'));
+  b += docxP('Fórmula: '+(d.salary_adjustment?.calculation_formula||'-'));
+  if(d.salary_floors?.length) b += docxH('Pisos Salariais') + docxTable(['Cargo','Piso anterior','Piso atual','Vigência'], d.salary_floors.map(r=>[r.role,r.previous_floor,r.current_floor,r.validity]));
+  if(d.benefits?.length) b += docxH('Benefícios') + docxTable(['Benefício','Valor','Quem recebe','Periodicidade'], d.benefits.map(r=>[r.name,r.value,r.recipients,r.frequency]));
+  b += docxH('Jornada e Ponto'); b += docxP(d.jornada_ponto?.resumo||'-'); b += docxP('Banco de horas: '+(d.jornada_ponto?.banco_horas||'-'));
+  b += docxH('Férias e Rescisão'); b += docxP('Férias: '+(d.ferias?.regras||'-')); b += docxP('Aviso-prévio: '+(d.rescisao?.aviso_previo||'-'));
+  b += docxH('Checklist'); (d.checklist||[]).forEach(x=>b+=docxP('☐ '+x));
+  b += docxH('Cláusula por Cláusula');
+  (d.clauses||[]).forEach(c=>{
+    b += docxP((c.number||'')+' — '+(c.title||''), {bold:true, before:160});
+    b += docxP('Resumo: '+(c.summary||'-'));
+    b += docxP('Impacto RH/DP: '+(c.rh_impact||'-'));
+    b += docxP('Ação recomendada: '+(c.recommended_action||'-'));
+  });
+  b += docxH('Perguntas Pendentes'); (d.pending_questions||[]).forEach(x=>b+=docxP('• '+x));
+  return b;
+}
+async function downloadDocx(bodyXml, filename){
+  if(!window.JSZip){ $('#err').textContent='Gerador de Word não carregou.'; return; }
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${bodyXml}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417"/></w:sectPr></w:body></w:document>`;
+  const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', ct);
+  zip.folder('_rels').file('.rels', rels);
+  zip.folder('word').file('document.xml', doc);
+  try{
+    const blob = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  }catch(e){
+    $('#err').textContent = 'Erro ao salvar arquivo: '+(e&&e.message?e.message:e);
+  }
+}
+
+// ---------- comparison across analyzed CCTs ----------
+function renderComparison(items){
+  const fields = [
+    ['Sindicato', it=>it.meta?.sindicato||'-'],
+    ['Vigência', it=>(it.meta?.vigIni||'?')+' a '+(it.meta?.vigFim||'?')],
+    ['Reajuste %', it=>it.data?.salary_adjustment?.percentage||'-'],
+    ['Data aplicação reajuste', it=>it.data?.salary_adjustment?.application_date||'-'],
+    ['Piso (1º cargo)', it=>it.data?.salary_floors?.[0]?.current_floor||'-'],
+    ['% Hora extra', it=>it.data?.horas_extras_adicionais?.percentual_he||'-'],
+    ['Adicional noturno', it=>it.data?.horas_extras_adicionais?.adicional_noturno||'-'],
+    ['Banco de horas', it=>it.data?.jornada_ponto?.banco_horas||'-'],
+    ['Aviso-prévio', it=>it.data?.rescisao?.aviso_previo||'-'],
+    ['Homologação', it=>it.data?.rescisao?.homologacao||'-'],
+  ];
+  const headers = ['Item', ...items.map((it,i)=>it.meta?.sindicato||('CCT '+(i+1)))];
+  const rows = fields.map(([label,fn])=>{
+    const vals = items.map(fn);
+    const allEqual = vals.every(v=>String(v).trim().toLowerCase()===String(vals[0]).trim().toLowerCase());
+    return {label, vals, allEqual};
+  });
+  let html = `<div class="card"><h2 style="margin-top:0;font-size:16px">Comparação entre Convenções</h2><p class="muted">Linhas marcadas "igual" têm o mesmo valor em todas as convenções selecionadas.</p>
+  <div class="tblwrap"><table><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>
+  ${rows.map(r=>`<tr><td><b>${esc(r.label)}</b> ${r.allEqual?'<span class="pill green">igual</span>':'<span class="pill yellow">diferente</span>'}</td>${r.vals.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}
+  </table></div>
+  <button class="btn" id="cmpWordBtn" style="margin-top:14px">Baixar comparação em Word</button></div>`;
+  $('#report').innerHTML = html;
+  $('#cmpWordBtn').onclick = ()=>{
+    let body = docxH('Comparação entre Convenções Coletivas');
+    body += docxTable(headers, rows.map(r=>[r.label+(r.allEqual?' (igual)':' (diferente)'), ...r.vals]));
+    downloadDocx(body, 'comparacao-ccts.docx');
+  };
+  $('#report').scrollIntoView({behavior:'smooth'});
+}</script>
+</body>
+</html>
